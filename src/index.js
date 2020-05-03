@@ -5,18 +5,34 @@ import { Icosahedron } from "./icosahedron.js";
 import { Icosphere } from "./icosphere.js";
 import { MobiusTube } from "./mobiusTube.js";
 import { Sphere } from "./sphere.js";
+import './styles.css';
+
+var width = window.innerWidth;
+var height = window.innerHeight;
 
 var [canvas, gl] = createCanvas(window.innerWidth, window.innerHeight);
 
 var rotation = 0;
 var time = 0;
+var deltaTime = 0;
 var AMORTIZATION = 0.95;
 var drag = false;
 var old_x, old_y;
 var dX = 0, dY = 0;
 var THETA = 0, PHI = 0;
-var position = { x: 0, y:0, z:20 }
-console.log(position);
+
+// PLAYER + CONTROLS
+// var position = { x: 0, y:0, z:20 }
+var position = vec3.fromValues(0, 0, 20);
+var direction = vec3.fromValues(0, 0, 0);
+var right = vec3.fromValues(-1, 0, 0);
+var up = vec3.create();
+var target = vec3.create();
+var horizontalAngle = Math.PI;
+var verticalAngle = 0;
+var initialFOV = 45;
+var speed = 10;
+var mouseSpeed = 0.05;
 
 canvas.addEventListener("mousedown", mouseDown, false);
 canvas.addEventListener("mouseup", mouseUp, false);
@@ -25,13 +41,6 @@ canvas.addEventListener("mousemove", mouseMove, false);
 
 document.addEventListener('keydown', updatePosition, false);
 
-function updatePosition(e){
-    e.preventDefault();
-    if (e.key === "w")      position.z -= 0.2;
-    else if (e.key === "s") position.z += 0.2;
-    else if (e.key === "a") position.x -= 0.2;
-    else if (e.key === "d") position.x += 0.2;
-}
 
 
 main();
@@ -262,7 +271,7 @@ function main() {
     var then = 0;
     function render(now){
         now *= 0.001;
-        const deltaTime = now - then;
+        deltaTime = now - then;
         then = now;
 
         if (!drag) {
@@ -270,13 +279,13 @@ function main() {
             THETA+=dX, PHI+=dY;
         }
 
-        drawScene(gl, programInfo, {icosphere}, deltaTime);
+        drawScene(gl, programInfo, {icosphere});
         requestAnimationFrame(render);
     }
     requestAnimationFrame(render);
 }
 
-function drawScene(gl, programInfo, geoms, deltaTime) {
+function drawScene(gl, programInfo, geoms) {
     gl.clearColor(0.0, 0.0, 0.0, 1.0);  // Clear to black, fully opaque
     gl.clearDepth(1.0);                 // Clear everything
     // gl.enable(gl.CULL_FACE);
@@ -285,7 +294,7 @@ function drawScene(gl, programInfo, geoms, deltaTime) {
 
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    const fieldOfView = 45 * Math.PI / 180;   // in radians
+    const fieldOfView = initialFOV * Math.PI / 180;   // in radians
     const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
     const zNear = 0.1;
     const zFar = 100.0;
@@ -297,19 +306,20 @@ function drawScene(gl, programInfo, geoms, deltaTime) {
         zFar);
 
     const viewMatrix = mat4.create();
-    const eye = vec3.fromValues(position.x,position.y,position.z);
-    const target = vec3.fromValues(0,0,0);
-    vec3.add(target, eye, vec3.fromValues(0,0,-1));
-    const up = vec3.fromValues(0,1,0);
-    mat4.lookAt(viewMatrix, eye, target, up);
+    mouseLookAt(viewMatrix);
+    // const eye = vec3.fromValues(position.x,position.y,position.z);
+    // const target = vec3.fromValues(0,0,0);
+    // vec3.add(target, eye, vec3.fromValues(0,0,-1));
+    // const up = vec3.fromValues(0,1,0);
+    // mat4.lookAt(viewMatrix, eye, target, up);
 
     for(const g in geoms){
         const geometry = geoms[g].geometry;
         const buffers = geoms[g].buffers;
         const modelMatrix = mat4.create();
         mat4.translate(modelMatrix, modelMatrix, geometry.translate);
-        mat4.rotate(modelMatrix, modelMatrix, THETA, [0,1,0]);
-        mat4.rotate(modelMatrix, modelMatrix, PHI, [1,0,0]);
+        // mat4.rotate(modelMatrix, modelMatrix, THETA, [0,1,0]);
+        // mat4.rotate(modelMatrix, modelMatrix, PHI, [1,0,0]);
         mat4.rotate(modelMatrix, modelMatrix, rotation, [0, 1, 0]); // Rotate around z-axis
         // mat4.rotate(modelMatrix, modelMatrix, rotation * .7, [0, 1, 0]); // Rotate around z-axis
 
@@ -405,7 +415,7 @@ function drawScene(gl, programInfo, geoms, deltaTime) {
             [20, 50, 30]);
         gl.uniform3fv(
             programInfo.uniformLocations.cameraPosition,
-            eye);
+            position);
         gl.uniform1f(
             programInfo.uniformLocations.shininess,
             150);
@@ -437,11 +447,35 @@ function mouseUp(e){
 
 function mouseMove(e) {
     if (!drag) return false;
-    dX = (e.pageX-old_x)*2*Math.PI/canvas.width,
-        dY = (e.pageY-old_y)*2*Math.PI/canvas.height;
-    THETA+= dX;
-    PHI+=dY;
+    // dX = (e.pageX-old_x)*2*Math.PI/canvas.width,
+        // dY = (e.pageY-old_y)*2*Math.PI/canvas.height;
+    dX = (e.pageX-old_x);
+    dY = (e.pageY-old_y);
+    // THETA+= dX;
+    // PHI+=dY;
     old_x = e.pageX, old_y = e.pageY;
+    horizontalAngle += mouseSpeed * deltaTime * dX;
+    verticalAngle += mouseSpeed * deltaTime * dY;
     e.preventDefault();
 };
 
+function mouseLookAt(viewMatrix){
+    direction = vec3.fromValues(Math.cos(verticalAngle) * Math.sin(horizontalAngle),
+                                Math.sin(verticalAngle),
+                                Math.cos(verticalAngle) * Math.cos(horizontalAngle));
+    right = vec3.fromValues(Math.sin(horizontalAngle - 3.14/2),
+                            0,
+                            Math.cos(horizontalAngle - 3.14/2));
+    up = vec3.cross(up, right, direction);
+
+    target = vec3.add(target, position, direction);
+    mat4.lookAt(viewMatrix, position, target, up);
+}
+
+function updatePosition(e){
+    e.preventDefault();
+    if (e.key === "w")      vec3.scaleAndAdd(position, position, direction, deltaTime * speed);
+    else if (e.key === "s") vec3.scaleAndAdd(position, position, direction, deltaTime * -speed);
+    else if (e.key === "a") vec3.scaleAndAdd(position, position, right, deltaTime * -speed);
+    else if (e.key === "d") vec3.scaleAndAdd(position, position, right, deltaTime * speed);
+}
