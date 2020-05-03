@@ -8,5 +8,6 @@ If you want to download the repo and run it locally:
 
 ```
 npm install
+mkdir dist
 npm run dev
 ```
