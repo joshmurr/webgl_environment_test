@@ -15,24 +15,24 @@ var [canvas, gl] = createCanvas(window.innerWidth, window.innerHeight);
 var rotation = 0;
 var time = 0;
 var deltaTime = 0;
-var AMORTIZATION = 0.95;
 var drag = false;
 var old_x, old_y;
 var dX = 0, dY = 0;
-var THETA = 0, PHI = 0;
 
 // PLAYER + CONTROLS
 // var position = { x: 0, y:0, z:20 }
-var position = vec3.fromValues(0, 0, 20);
-var direction = vec3.fromValues(0, 0, 0);
-var right = vec3.fromValues(-1, 0, 0);
+var position = vec3.fromValues(0, 10, 60);
+var direction = vec3.create();
+var right = vec3.create();
 var up = vec3.create();
 var target = vec3.create();
 var horizontalAngle = Math.PI;
 var verticalAngle = 0;
-var initialFOV = 45;
-var speed = 10;
+var FOV = 45;
+var speed = 50;
 var mouseSpeed = 0.05;
+
+var mousewheelevt=(/Firefox/i.test(navigator.userAgent))? "DOMMouseScroll" : "mousewheel";
 
 canvas.addEventListener("mousedown", mouseDown, false);
 canvas.addEventListener("mouseup", mouseUp, false);
@@ -40,6 +40,7 @@ canvas.addEventListener("mouseout", mouseUp, false);
 canvas.addEventListener("mousemove", mouseMove, false);
 
 document.addEventListener('keydown', updatePosition, false);
+document.addEventListener(mousewheelevt, zoom, false);
 
 
 
@@ -55,7 +56,7 @@ function main() {
     const vsSource = `#version 300 es
         in vec4 aVertexPosition;
         in vec3 aVertexNormal;
-        in vec4 aVertexColor;
+        // in vec4 aVertexColor;
 
         uniform mat4 uNormalMatrix;
         uniform mat4 uModelMatrix;
@@ -64,8 +65,9 @@ function main() {
         uniform vec3 uCameraPosition;
         uniform float uTime;
         uniform vec3 u_lightWorldPosition;
+        uniform vec3 uSeedValues;
 
-        out highp vec4 vColor;
+        // out highp vec4 vColor;
         out highp vec3 vNormal;
         out highp vec3 vLighting;
         out vec3 v_surfaceToLight;
@@ -177,12 +179,12 @@ function main() {
             vec3 position = aVertexPosition.xyz;
             vNormal = aVertexNormal;
 
-            noise = 10.0 *  -.10 * turbulence( .05 * vNormal + 0.01*uTime );
-            float b = 5.0 * pnoise( 0.05 * position + vec3(0.02 * uTime), vec3( 10.0 ) );
+            noise = 10.0 *  -.10 * turbulence( uSeedValues.y * vNormal + uSeedValues.x*uTime );
+            float b = uSeedValues.z * pnoise( 0.05 * position + vec3(0.02 * uTime), vec3( 10.0 ) );
             float displacement = - 10. * noise + b;
             position = position + vNormal * displacement;
 
-            vColor = aVertexColor;
+            // vColor = aVertexColor;
             gl_Position = uProjectionMatrix * uViewMatrix * uModelMatrix * vec4(position, 1.0);
         }
     `;
@@ -190,7 +192,7 @@ function main() {
     // Fragment shader program
     const fsSource = `#version 300 es
         precision highp float;
-        in vec4 vColor;
+        // in vec4 vColor;
         in vec3 vLighting;
         in vec3 vNormal;
         in vec3 v_surfaceToLight;
@@ -200,6 +202,7 @@ function main() {
         // uniform vec3 u_reverseLightDirection;
         uniform float u_shininess;
         uniform float uTime;
+        uniform vec3 uColor;
 
         out highp vec4 outColor;
 
@@ -225,7 +228,9 @@ function main() {
 
             float r = .01 * random(vec3(12.9898, 78.233, 151.7182 ), 0.0 );
             float scale = 1.3 * noise + r;
-            outColor = vec4(vec3(sin(uTime*0.1), cos(uTime*0.1), sin(-uTime*0.5))  * (1.0 - 2.0 * noise), vColor.a);
+            outColor = vec4(vec3(sin(uColor.r+uTime),
+                                 cos(uColor.g+uTime*0.1),
+                                -sin(uColor.b+uTime*1.2))  * scale, 1.0);
             // vec3 color = vec3(0.8, 0.4, 0.1);
             // outColor = vec4(color*scale, vColor.a);
             // outColor += specular;
@@ -244,7 +249,7 @@ function main() {
         attribLocations: {
             vertexPosition: gl.getAttribLocation(shaderProgram, 'aVertexPosition'),
             vertexNormal: gl.getAttribLocation(shaderProgram, 'aVertexNormal'),
-            vertexColor: gl.getAttribLocation(shaderProgram, 'aVertexColor'),
+            // vertexColor: gl.getAttribLocation(shaderProgram, 'aVertexColor'),
             // textureCoord: gl.getAttribLocation(shaderProgram, 'aTextureCoord'),
         },
         uniformLocations: {
@@ -253,6 +258,8 @@ function main() {
             viewMatrix: gl.getUniformLocation(shaderProgram, 'uViewMatrix'),
             normalMatrix: gl.getUniformLocation(shaderProgram, 'uNormalMatrix'),
             time: gl.getUniformLocation(shaderProgram, 'uTime'),
+            color: gl.getUniformLocation(shaderProgram, 'uColor'),
+            seedValues: gl.getUniformLocation(shaderProgram, 'uSeedValues'),
             reverseLightDirection: gl.getUniformLocation(shaderProgram, 'u_reverseLightDirection'),
             lightWorldPosition: gl.getUniformLocation(shaderProgram, 'u_lightWorldPosition'),
             cameraPosition: gl.getUniformLocation(shaderProgram, 'uCameraPosition'),
@@ -265,8 +272,14 @@ function main() {
     // const buffers = new Icosahedron(gl);
     // const sphere = new Sphere(gl);
     // const tube = new MobiusTube(gl);
-    const icosphere = new Icosphere(gl);
-    // const buffers = MobiusTube.buffers;
+    let geoms = [];
+    for(let i=0; i<3; i++){
+        for(let j=0; j<3; j++){
+            const icosphere = new Icosphere(gl, Math.floor(Math.random()*4)+1);
+            icosphere.position = [i*Math.random()*50, Math.random()*Math.random()*10, j*Math.random()*50];
+            geoms.push(icosphere);
+        }
+    }
 
     var then = 0;
     function render(now){
@@ -274,12 +287,7 @@ function main() {
         deltaTime = now - then;
         then = now;
 
-        if (!drag) {
-            dX *= AMORTIZATION, dY*=AMORTIZATION;
-            THETA+=dX, PHI+=dY;
-        }
-
-        drawScene(gl, programInfo, {icosphere});
+        drawScene(gl, programInfo, geoms);
         requestAnimationFrame(render);
     }
     requestAnimationFrame(render);
@@ -294,10 +302,10 @@ function drawScene(gl, programInfo, geoms) {
 
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    const fieldOfView = initialFOV * Math.PI / 180;   // in radians
+    const fieldOfView = FOV * Math.PI / 180;   // in radians
     const aspect = gl.canvas.clientWidth / gl.canvas.clientHeight;
     const zNear = 0.1;
-    const zFar = 100.0;
+    const zFar = 500.0;
     const projectionMatrix = mat4.create();
     mat4.perspective(projectionMatrix,
         fieldOfView,
@@ -307,21 +315,13 @@ function drawScene(gl, programInfo, geoms) {
 
     const viewMatrix = mat4.create();
     mouseLookAt(viewMatrix);
-    // const eye = vec3.fromValues(position.x,position.y,position.z);
-    // const target = vec3.fromValues(0,0,0);
-    // vec3.add(target, eye, vec3.fromValues(0,0,-1));
-    // const up = vec3.fromValues(0,1,0);
-    // mat4.lookAt(viewMatrix, eye, target, up);
 
-    for(const g in geoms){
-        const geometry = geoms[g].geometry;
-        const buffers = geoms[g].buffers;
+    for(const g of geoms){
+        const geometry = g;
+        const buffers = geometry.buffers;
         const modelMatrix = mat4.create();
-        mat4.translate(modelMatrix, modelMatrix, geometry.translate);
-        // mat4.rotate(modelMatrix, modelMatrix, THETA, [0,1,0]);
-        // mat4.rotate(modelMatrix, modelMatrix, PHI, [1,0,0]);
-        mat4.rotate(modelMatrix, modelMatrix, rotation, [0, 1, 0]); // Rotate around z-axis
-        // mat4.rotate(modelMatrix, modelMatrix, rotation * .7, [0, 1, 0]); // Rotate around z-axis
+        mat4.translate(modelMatrix, modelMatrix, geometry.position);
+        mat4.rotate(modelMatrix, modelMatrix, rotation, geometry.rotation); // Rotate around z-axis
 
         const normalMatrix = mat4.create();
         mat4.invert(normalMatrix, modelMatrix);
@@ -365,22 +365,22 @@ function drawScene(gl, programInfo, geoms) {
                 programInfo.attribLocations.vertexNormal);
         }
         // VERTEX COLOUR
-        {
-            const numComponents = 4;
-            const type = gl.FLOAT;
-            const normalize = false;
-            const stride = 0;
-            const offset = 0;
-            gl.bindBuffer(gl.ARRAY_BUFFER, buffers.color);
-            gl.vertexAttribPointer(
-                programInfo.attribLocations.vertexColor,
-                numComponents,
-                type,
-                normalize,
-                stride,
-                offset);
-            gl.enableVertexAttribArray( programInfo.attribLocations.vertexColor);
-        }
+        // {
+            // const numComponents = 4;
+            // const type = gl.FLOAT;
+            // const normalize = false;
+            // const stride = 0;
+            // const offset = 0;
+            // gl.bindBuffer(gl.ARRAY_BUFFER, buffers.color);
+            // gl.vertexAttribPointer(
+                // programInfo.attribLocations.vertexColor,
+                // numComponents,
+                // type,
+                // normalize,
+                // stride,
+                // offset);
+            // gl.enableVertexAttribArray( programInfo.attribLocations.vertexColor);
+        // }
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
 
@@ -416,6 +416,12 @@ function drawScene(gl, programInfo, geoms) {
         gl.uniform3fv(
             programInfo.uniformLocations.cameraPosition,
             position);
+        gl.uniform3fv(
+            programInfo.uniformLocations.color,
+            geometry.color);
+        gl.uniform3fv(
+            programInfo.uniformLocations.seedValues,
+            geometry.seedValues);
         gl.uniform1f(
             programInfo.uniformLocations.shininess,
             150);
@@ -447,12 +453,8 @@ function mouseUp(e){
 
 function mouseMove(e) {
     if (!drag) return false;
-    // dX = (e.pageX-old_x)*2*Math.PI/canvas.width,
-        // dY = (e.pageY-old_y)*2*Math.PI/canvas.height;
     dX = (e.pageX-old_x);
     dY = (e.pageY-old_y);
-    // THETA+= dX;
-    // PHI+=dY;
     old_x = e.pageX, old_y = e.pageY;
     horizontalAngle += mouseSpeed * deltaTime * dX;
     verticalAngle += mouseSpeed * deltaTime * dY;
@@ -461,11 +463,11 @@ function mouseMove(e) {
 
 function mouseLookAt(viewMatrix){
     direction = vec3.fromValues(Math.cos(verticalAngle) * Math.sin(horizontalAngle),
-                                Math.sin(verticalAngle),
-                                Math.cos(verticalAngle) * Math.cos(horizontalAngle));
+        Math.sin(verticalAngle),
+        Math.cos(verticalAngle) * Math.cos(horizontalAngle));
     right = vec3.fromValues(Math.sin(horizontalAngle - 3.14/2),
-                            0,
-                            Math.cos(horizontalAngle - 3.14/2));
+        0,
+        Math.cos(horizontalAngle - 3.14/2));
     up = vec3.cross(up, right, direction);
 
     target = vec3.add(target, position, direction);
@@ -478,4 +480,13 @@ function updatePosition(e){
     else if (e.key === "s") vec3.scaleAndAdd(position, position, direction, deltaTime * -speed);
     else if (e.key === "a") vec3.scaleAndAdd(position, position, right, deltaTime * -speed);
     else if (e.key === "d") vec3.scaleAndAdd(position, position, right, deltaTime * speed);
+}
+
+function zoom(e){
+    const evt = window.event || e //equalize event object
+    if(FOV >= 20 && FOV <= 120) FOV += evt.detail ? evt.detail*(-1) : evt.wheelDelta //delta returns +1 when wheel is scrolled up, -1 when scrolled down
+    if(FOV < 20) FOV = 21;
+    if(FOV > 120) FOV = 119;
+    if (evt.preventDefault) evt.preventDefault()
+    else return false
 }

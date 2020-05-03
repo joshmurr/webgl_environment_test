@@ -1,12 +1,19 @@
-
+import { vec3 } from "gl-matrix";
 import { HSVtoRGB } from "./utils.js";
 
 export class Icosphere {
-    constructor(gl){
-        this._translate = [0,0,0];
+    constructor(gl, it){
         this._vertIndex = {};
         this._vertIdCounter = 0;
         this.faces = [];
+        this._position = [0, 0, 0];
+        this._color = vec3.fromValues(Math.random(), Math.random(), Math.random());
+        this._seedValues = vec3.fromValues(
+            (Math.random() * 0.09) + 0.2, // freq  
+            (Math.random() * 1.5) + 0.2, // amp   
+            (Math.random() * 5) + 4,    // scale 
+        );
+        this._rotation = vec3.fromValues(Math.random(), Math.random(), Math.random());
 
         this.verts = [
             0.000, 0.000, 1.000,
@@ -46,14 +53,14 @@ export class Icosphere {
         ];
 
         this.normalizeVerts();
-        this.createIcosphere(3); // Generates new verts and faces
+        this.createIcosphere(it); // Generates new verts and faces
 
-        this.colors = [];
-        for(let i=0; i<this.verts.length; i++){
-            const c = i/this.verts.length;
-            const [R,G,B] = HSVtoRGB(c, 1.0, 1.0);
-            this.colors.push(R, G, B, 1.0);
-        }
+        // this.colors = [];
+        // for(let i=0; i<this.verts.length; i++){
+            // const c = i/this.verts.length;
+            // const [R,G,B] = HSVtoRGB(c, 1.0, 1.0);
+            // this.colors.push(R, G, B, 1.0);
+        // }
 
         this.indices = [];
         for(let f of this.faces){
@@ -67,29 +74,48 @@ export class Icosphere {
         gl.bindBuffer(gl.ARRAY_BUFFER, normalBuffer);
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.verts), gl.STATIC_DRAW);
 
-        const colorBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.colors), gl.STATIC_DRAW);
+        // const colorBuffer = gl.createBuffer();
+        // gl.bindBuffer(gl.ARRAY_BUFFER, colorBuffer);
+        // gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(this.colors), gl.STATIC_DRAW);
 
         const indexBuffer = gl.createBuffer();
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(this.indices), gl.STATIC_DRAW);
 
-        return {
-            geometry: this,
-            buffers: {
-                position: positionBuffer,
-                color: colorBuffer,
-                normal: normalBuffer,
-                indices: indexBuffer,
-            }
-        };
+        this._buffers = {
+            position: positionBuffer,
+            // color: colorBuffer,
+            normal: normalBuffer,
+            indices: indexBuffer,
+        }
     }
     get numFaces(){
         return this.indices.length;
     }
-    get translate(){
-        return this._translate;
+
+    get buffers(){
+        return this._buffers;
+    }
+
+    get position(){
+        return this._position;
+    }
+    set position(pos){
+        this._position[0] = pos[0];
+        this._position[1] = pos[1];
+        this._position[2] = pos[2];
+    }
+
+    get rotation(){
+        return this._rotation;
+    }
+
+    get color(){
+        return this._color;
+    }
+
+    get seedValues(){
+        return this._seedValues;
     }
 
     normalizeVerts(){
