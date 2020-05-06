@@ -24,6 +24,7 @@
   },
   "dependencies": {
     "browser-resolve": "^1.11.3",
+    "file-loader": "^6.0.0",
     "gl-matrix": "^3.3.0"
   },
   "keywords": [],

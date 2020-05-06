@@ -1,15 +1,15 @@
 import { vec3 } from "gl-matrix";
-import { HSVtoRGB } from "./utils.js";
+import { HSVtoRGB, loadTexture } from "./utils.js";
 
 export class Icosphere {
-    constructor(gl, it){
+    constructor(gl, it, texture){
         this._vertIndex = {};
         this._vertIdCounter = 0;
         this.faces = [];
         this._position = [0, 0, 0];
         this._color = vec3.fromValues(Math.random(), Math.random(), Math.random());
         this._seedValues = vec3.fromValues(
-            (Math.random() * 0.09) + 0.2, // freq  
+            (Math.random() * 0.05) + 0.01, // freq  
             (Math.random() * 1.5) + 0.2, // amp   
             (Math.random() * 5) + 4,    // scale 
         );
@@ -82,6 +82,8 @@ export class Icosphere {
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, indexBuffer);
         gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(this.indices), gl.STATIC_DRAW);
 
+        this._texture = loadTexture(gl, texture);
+
         this._buffers = {
             position: positionBuffer,
             // color: colorBuffer,
@@ -95,6 +97,10 @@ export class Icosphere {
 
     get buffers(){
         return this._buffers;
+    }
+
+    get texture(){
+        return this._texture;
     }
 
     get position(){

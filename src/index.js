@@ -1,4 +1,4 @@
-import { createCanvas, initShaderProgram } from "./setup";
+import { createCanvas, createOverlay, initShaderProgram } from "./setup";
 import { mat4, vec3 } from "gl-matrix";
 import { HSVtoRGB } from "./utils";
 import { Icosahedron } from "./icosahedron.js";
@@ -6,11 +6,14 @@ import { Icosphere } from "./icosphere.js";
 import { MobiusTube } from "./mobiusTube.js";
 import { Sphere } from "./sphere.js";
 import './styles.css';
+import explosionTex from './explosion.png';
 
 var width = window.innerWidth;
 var height = window.innerHeight;
 
 var [canvas, gl] = createCanvas(window.innerWidth, window.innerHeight);
+
+createOverlay();
 
 var rotation = 0;
 var time = 0;
@@ -203,6 +206,7 @@ function main() {
         uniform float u_shininess;
         uniform float uTime;
         uniform vec3 uColor;
+        uniform sampler2D uSampler;
 
         out highp vec4 outColor;
 
@@ -227,10 +231,17 @@ function main() {
             // }
 
             float r = .01 * random(vec3(12.9898, 78.233, 151.7182 ), 0.0 );
-            float scale = 1.3 * noise + r;
-            outColor = vec4(vec3(sin(uColor.r+uTime),
-                                 cos(uColor.g+uTime*0.1),
-                                -sin(uColor.b+uTime*1.2))  * scale, 1.0);
+            // float scale = 1.3 * noise + r;
+            
+            vec2 tPos = vec2(0, 1.3 * noise + r);
+            outColor = texture(uSampler, tPos);
+
+
+
+
+            // outColor = vec4(vec3(sin(uColor.r+uTime*0.8),
+                                 // cos(uColor.g+uTime*0.1),
+                                 // sin(uColor.b+uTime*1.2))  * scale, 1.0);
             // vec3 color = vec3(0.8, 0.4, 0.1);
             // outColor = vec4(color*scale, vColor.a);
             // outColor += specular;
@@ -264,7 +275,7 @@ function main() {
             lightWorldPosition: gl.getUniformLocation(shaderProgram, 'u_lightWorldPosition'),
             cameraPosition: gl.getUniformLocation(shaderProgram, 'uCameraPosition'),
             shininess: gl.getUniformLocation(shaderProgram, 'u_shininess'),
-            // uSampler: gl.getUniformLocation(shaderProgram, 'uSampler'),
+            texture: gl.getUniformLocation(shaderProgram, 'uSampler'),
         },
     };
 
@@ -273,10 +284,12 @@ function main() {
     // const sphere = new Sphere(gl);
     // const tube = new MobiusTube(gl);
     let geoms = [];
-    for(let i=0; i<3; i++){
-        for(let j=0; j<3; j++){
-            const icosphere = new Icosphere(gl, Math.floor(Math.random()*4)+1);
-            icosphere.position = [i*Math.random()*50, Math.random()*Math.random()*10, j*Math.random()*50];
+    const n = 2;
+    for(let i=0; i<n; i++){
+        for(let j=0; j<n; j++){
+            const surfaceResolution = Math.floor(Math.random()*5)+2;
+            const icosphere = new Icosphere(gl, surfaceResolution, explosionTex);
+            icosphere.position = [i*Math.random()*50, Math.random()*10, j*Math.random()*50];
             geoms.push(icosphere);
         }
     }
@@ -366,20 +379,20 @@ function drawScene(gl, programInfo, geoms) {
         }
         // VERTEX COLOUR
         // {
-            // const numComponents = 4;
-            // const type = gl.FLOAT;
-            // const normalize = false;
-            // const stride = 0;
-            // const offset = 0;
-            // gl.bindBuffer(gl.ARRAY_BUFFER, buffers.color);
-            // gl.vertexAttribPointer(
-                // programInfo.attribLocations.vertexColor,
-                // numComponents,
-                // type,
-                // normalize,
-                // stride,
-                // offset);
-            // gl.enableVertexAttribArray( programInfo.attribLocations.vertexColor);
+        // const numComponents = 4;
+        // const type = gl.FLOAT;
+        // const normalize = false;
+        // const stride = 0;
+        // const offset = 0;
+        // gl.bindBuffer(gl.ARRAY_BUFFER, buffers.color);
+        // gl.vertexAttribPointer(
+        // programInfo.attribLocations.vertexColor,
+        // numComponents,
+        // type,
+        // normalize,
+        // stride,
+        // offset);
+        // gl.enableVertexAttribArray( programInfo.attribLocations.vertexColor);
         // }
 
         gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, buffers.indices);
@@ -425,6 +438,9 @@ function drawScene(gl, programInfo, geoms) {
         gl.uniform1f(
             programInfo.uniformLocations.shininess,
             150);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.bindTexture(gl.TEXTURE_2D, geometry.texture);
+        gl.uniform1i(programInfo.uniformLocations.texture, 0);
 
         {
             // console.log(MobiusTube.numFaces);
